@@ -1,0 +1,42 @@
+"""
+Can use the below for furthermore UI customization.
+Also in CYPHER_GENERATION_TEMPLATE it becomes important to mention the line:
+Do not use EXCEPT, EXISTS, SIZE, HAVING keywords in the cypher.
+"""
+
+import pandas as pd
+import random
+
+csv_url = 'https://raw.githubusercontent.com/tomasonjo/blog-datasets/main/movies/movies_small.csv'
+df = pd.read_csv(csv_url)
+
+# Display CSV headers and random 10 rows as dropdowns
+st.sidebar.title('Data Selection')
+selected_columns = st.sidebar.multiselect('Select columns to display:', list(df.columns), default=list(df.columns))
+selected_rows = st.sidebar.multiselect('Select random rows:', df.index.tolist(), default=random.sample(df.index.tolist(), min(10, len(df))))
+
+# Display selected data
+st.write(df[selected_columns].loc[selected_rows])
+
+movies_query = """
+LOAD CSV WITH HEADERS FROM
+'{}'
+AS row
+WITH row,
+    split(row.director, '|') AS directors,
+    split(row.actors, '|') AS actors,
+    split(row.genres, '|') AS genres
+MERGE (m:Movie {{id:row.movieId}})
+SET m.released = date(row.released),
+    m.title = row.title,
+    m.imdbRating = toFloat(row.imdbRating)
+FOREACH (director in directors | 
+    MERGE (p:Person {{name:trim(director)}})
+    MERGE (p)-[:DIRECTED]->(m))
+FOREACH (actor in actors | 
+    MERGE (p:Person {{name:trim(actor)}})
+    MERGE (p)-[:ACTED_IN]->(m))
+FOREACH (genre in genres | 
+    MERGE (g:Genre {{name:trim(genre)}})
+    MERGE (m)-[:IN_GENRE]->(g))
+""".format(csv_url)
